@@ -1,5 +1,7 @@
 # CharacterControllerTest
- Jed update soon?
+Jed update soon? Yes indeed
+
+ 
 
 Made in Unity 6000.0.30f1
 
@@ -12,7 +14,6 @@ Made in Unity 6000.0.30f1
 - Coyote Time
 - Jump Buffering
 - Step Snapping
-- Gamepad controls
 - Surface friction / platforms
 
 ### Features
