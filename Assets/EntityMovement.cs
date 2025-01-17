@@ -4,13 +4,15 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using static UnityEngine.UI.Image;
 
 public class EntityMovement : MonoBehaviour {
     [Header("Main")]
     public GameObject wrapper;
 
     [Header("Speed")]
-    public float speed=7;
+    public float baseSpeed=7;
+    public float sprintSpeed = 10;
     public float jumpSpeed=4;
     public float maxAcceleration = 100f;
     public bool accelOppositeFix = true;
@@ -29,6 +31,7 @@ public class EntityMovement : MonoBehaviour {
     private float angle;
     private Rigidbody rb;
     private CapsuleCollider cc;
+    private float speed;
 
     private void Start() {
         rb = GetComponent<Rigidbody>();
@@ -36,6 +39,7 @@ public class EntityMovement : MonoBehaviour {
         cc.hasModifiableContacts = true;
         Physics.ContactModifyEvent += Physics_ContactModifyEvent;
         instanceId = cc.GetInstanceID();
+        speed = baseSpeed;
     }
 
     public void OnDisable() {
@@ -71,10 +75,13 @@ public class EntityMovement : MonoBehaviour {
     }
 
     public void ToggleSprint(bool sprint) {
-
+        speed = sprint ? sprintSpeed : baseSpeed;
     }
-    
-    public void Jump() {
+
+    public void ToggleCrouch(bool crouch) {
+    }
+
+    public void QueueJump() {
     }
 
     private void Update() {
@@ -95,9 +102,18 @@ public class EntityMovement : MonoBehaviour {
         Vector3 test = new Vector3(localWishDirection.x, 0f, localWishDirection.y).normalized;
         Vector3 globalWishVelocity = wrapper.transform.TransformDirection(test);
 
+        Vector3 origin = rb.position + Vector3.up * snapToNormalOffset;
+        if (Physics.SphereCast(origin, cc.radius, Vector3.down, out RaycastHit hit3, snapToNormalDist, ~LayerMask.GetMask("Player"))) {
+            Vector3 temp = Vector3.ProjectOnPlane(globalWishVelocity, hit3.normal);
+            globalWishVelocity = temp;
+            globalWishVelocity.y = 0f;
+        }
+
         // TODO: Fix weird acceleration on slopes
         globalWishVelocity *= speed;
         Vector3 currentVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+
+
 
         // Handle some pretty simple acceleration and max acceleration
         Vector3 acceleration = globalWishVelocity - currentVelocity;
@@ -125,7 +141,6 @@ public class EntityMovement : MonoBehaviour {
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, oldGravity, rb.linearVelocity.z);
 
         // Used to stop the player from sliding down slopes and to "snap" the player to the ground normal
-        Vector3 origin = rb.position + Vector3.up * snapToNormalOffset /* + globalDir * Time.fixedDeltaTime */;
         if (Physics.SphereCast(origin, cc.radius, Vector3.down, out RaycastHit hit, snapToNormalDist, ~LayerMask.GetMask("Player"))) {
             Vector3 offset = origin + Vector3.down * hit.distance;
             DebugUtils.DrawSphere(offset, cc.radius, Color.white);

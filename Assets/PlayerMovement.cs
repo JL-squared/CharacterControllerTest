@@ -27,6 +27,15 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     public void Jump(InputAction.CallbackContext context) {
+        movement.QueueJump();
+    }
+
+    public void Sprint(InputAction.CallbackContext context) {
+        movement.ToggleSprint(context.performed);
+    }
+
+    public void Crouch(InputAction.CallbackContext context) {
+        movement.ToggleCrouch(context.performed);
     }
 
     private void Update() {
