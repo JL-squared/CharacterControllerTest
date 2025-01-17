@@ -42,10 +42,12 @@ Material:
     - _Offset: 9.5
     - _QueueControl: 0
     - _QueueOffset: 0
+    - _Smoothness: 0.2
+    - _Smoothness_1: 0.1
     - _Tightness: 0.6
     m_Colors:
     - _Color: {r: 0, g: 0.21698111, b: 0.014909567, a: 0}
-    - _Color_1: {r: 0.14150941, g: 0.065815225, b: 0.015352439, a: 0}
+    - _Color_1: {r: 0.0754717, g: 0.032562744, b: 0.003203986, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
 --- !u!114 &1800576352362335329

@@ -1,11 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEditor;
 using UnityEngine;
-using UnityEngine.InputSystem;
-using static UnityEngine.UI.Image;
 
+// TODO FIX: For some reason breaks with moving platforms, just phases through it (from the top) 
 public class EntityMovement : MonoBehaviour {
     [Header("Main")]
     public GameObject wrapper;
@@ -25,13 +20,21 @@ public class EntityMovement : MonoBehaviour {
     public float maxAntiSlideSlope = 45f;
     public float snapToNormalStrength = -30f;
     public float snapToNormalDist = 0.5f;
-    
+
+    [Header("Friction")]
+    public float frictionFactor = 3f;
+    public float frictionOffset = 0.2f;
+
     private Vector2 localWishDirection;
     private int instanceId;
     private float angle;
     private Rigidbody rb;
     private CapsuleCollider cc;
     private float speed;
+
+    private float dynamicFriction;
+    private float staticFriction;
+    private Vector3 tempPosition;
 
     private void Start() {
         rb = GetComponent<Rigidbody>();
@@ -60,7 +63,27 @@ public class EntityMovement : MonoBehaviour {
                         //pair.SetDynamicFriction(i, 0.1f);
                         //pair.SetStaticFriction(i, 0.1f);
                         //pair.SetSeparation(i, pair.GetSeparation(i) + 0.1f);
+                    } else {
+                        dynamicFriction = pair.GetDynamicFriction(i);
+                        staticFriction = pair.GetStaticFriction(i);
                     }
+
+                    pair.SetDynamicFriction(i, 0);
+                    pair.SetStaticFriction(i, 0);
+
+                    // TODO: FIX THIS WHEN PUSHING HEAVY BOXES!!
+                    /*
+                    Vector3 point = pair.GetPoint(i);
+                    Vector3 offsettino = point - tempPosition;
+                    if (offsettino.y > -0.45f && offsettino.y < 0.45) {
+                        Debug.DrawRay(point, -pair.GetNormal(i));
+                        //pair.SetPoint(i, tempPosition + Vector3.down * 0.4f);
+                        pair.SetNormal(i, (pair.GetNormal(i) + Vector3.down * 2.0f).normalized);
+                        //pair.SetNormal(i, Vector3.down);
+                    }
+                    //pair.SetPoint(i, point);
+                    //Debug.Log();
+                    */
                 }
             }
         }
@@ -97,11 +120,13 @@ public class EntityMovement : MonoBehaviour {
     }
 
     private void FixedUpdate() {
+        tempPosition = rb.position;
         Vector3 point1 = rb.position + Vector3.down * cc.radius;
         float oldGravity = rb.linearVelocity.y;
         Vector3 test = new Vector3(localWishDirection.x, 0f, localWishDirection.y).normalized;
         Vector3 globalWishVelocity = wrapper.transform.TransformDirection(test);
 
+        // Project velocity on slope so that we can lower player speed in that direction
         Vector3 origin = rb.position + Vector3.up * snapToNormalOffset;
         if (Physics.SphereCast(origin, cc.radius, Vector3.down, out RaycastHit hit3, snapToNormalDist, ~LayerMask.GetMask("Player"))) {
             Vector3 temp = Vector3.ProjectOnPlane(globalWishVelocity, hit3.normal);
@@ -110,10 +135,9 @@ public class EntityMovement : MonoBehaviour {
         }
 
         // TODO: Fix weird acceleration on slopes
+        // TODO: See if we want to implement friction slow down for very rough surfaces
         globalWishVelocity *= speed;
         Vector3 currentVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-
-
 
         // Handle some pretty simple acceleration and max acceleration
         Vector3 acceleration = globalWishVelocity - currentVelocity;
@@ -124,8 +148,9 @@ public class EntityMovement : MonoBehaviour {
             factor = 2f;
         }
 
-        // Clamp the acceleration to some "maxAcceleration" constant
-        Vector3 finalVelocity = Vector3.ClampMagnitude(acceleration, maxAcceleration * factor * Time.fixedDeltaTime);
+        // Clamp the acceleration to some "maxAcceleration" constant and take account the surface we're on (friction wise
+        float frictionThing = Mathf.Clamp01(dynamicFriction * frictionFactor + frictionOffset);
+        Vector3 finalVelocity = Vector3.ClampMagnitude(acceleration, maxAcceleration * factor * Time.fixedDeltaTime * frictionThing);
 
         /*
         // Simple jump system
@@ -143,7 +168,7 @@ public class EntityMovement : MonoBehaviour {
         // Used to stop the player from sliding down slopes and to "snap" the player to the ground normal
         if (Physics.SphereCast(origin, cc.radius, Vector3.down, out RaycastHit hit, snapToNormalDist, ~LayerMask.GetMask("Player"))) {
             Vector3 offset = origin + Vector3.down * hit.distance;
-            DebugUtils.DrawSphere(offset, cc.radius, Color.white);
+            //DebugUtils.DrawSphere(offset, cc.radius, Color.white);
 
             //bool grounded = GetDist(rb.position, Vector3.down * 2.0f) > 0f;
 
@@ -156,7 +181,7 @@ public class EntityMovement : MonoBehaviour {
                 //temp += -hit.normal * snapToNormalStrength * Vector3.Distance(point1, offset);
                 rb.linearVelocity += -hit.normal * diff * snapToNormalStrength;
                 rb.useGravity = false;
-                Debug.DrawRay(hit.point, hit.normal);
+                //Debug.DrawRay(hit.point, hit.normal);
             } else {
                 rb.useGravity = true;
             }
