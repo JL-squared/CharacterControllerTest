@@ -9,6 +9,7 @@ public class EntityMovement : MonoBehaviour {
     public float baseSpeed=7;
     public float sprintSpeed = 10;
     public float jumpSpeed=4;
+    public float gravity = 9.81f;
     public float maxAcceleration = 100f;
     public bool accelOppositeFix = true;
 
@@ -20,6 +21,10 @@ public class EntityMovement : MonoBehaviour {
     public float maxAntiSlideSlope = 45f;
     public float snapToNormalStrength = -30f;
     public float snapToNormalDist = 0.5f;
+    public float speedMagnitudeFactor = 0.25f;
+    public float speedMagnitudeOffset = 1.0f;
+    public float verticalNormalFactor = 1.0f;
+    public float verticalNormalOffset = 1.0f;
 
     [Header("Friction")]
     public float frictionFactor = 3f;
@@ -32,6 +37,10 @@ public class EntityMovement : MonoBehaviour {
     private CapsuleCollider cc;
     private float speed;
 
+    private bool jump;
+    private bool grounded;
+    private float lastJumpTime;
+    private float summedGravity;
     private float dynamicFriction;
     private float staticFriction;
     private Vector3 tempPosition;
@@ -54,9 +63,10 @@ public class EntityMovement : MonoBehaviour {
             if (pair.colliderInstanceID == instanceId || pair.otherColliderInstanceID == instanceId) {
                 for (int i = 0; i < pair.contactCount; ++i) {
                     Vector3 normal = pair.GetNormal(i);
-                    
+                    float invertFactor = pair.otherColliderInstanceID == instanceId ? -1f : 1f;
+
                     // TODO: Fix weird thing when big terrain slopey slopey penetration thingy
-                    if (Vector3.Angle(normal, Vector3.up) > maxMovementAllowedSlope) {
+                    if (Vector3.Angle(normal * invertFactor, Vector3.up) > maxMovementAllowedSlope) {
                         normal.y = 0;
                         normal.Normalize();
                         pair.SetNormal(i, normal);
@@ -105,6 +115,7 @@ public class EntityMovement : MonoBehaviour {
     }
 
     public void QueueJump() {
+        jump = true;
     }
 
     private void Update() {
@@ -122,17 +133,13 @@ public class EntityMovement : MonoBehaviour {
     private void FixedUpdate() {
         tempPosition = rb.position;
         Vector3 point1 = rb.position + Vector3.down * cc.radius;
-        float oldGravity = rb.linearVelocity.y;
         Vector3 test = new Vector3(localWishDirection.x, 0f, localWishDirection.y).normalized;
         Vector3 globalWishVelocity = wrapper.transform.TransformDirection(test);
+        Vector3 s1 = rb.position + Vector3.down * 0.5f;
+        Vector3 s2 = rb.position + Vector3.up * 0.5f;
 
         // Project velocity on slope so that we can lower player speed in that direction
         Vector3 origin = rb.position + Vector3.up * snapToNormalOffset;
-        if (Physics.SphereCast(origin, cc.radius, Vector3.down, out RaycastHit hit3, snapToNormalDist, ~LayerMask.GetMask("Player"))) {
-            Vector3 temp = Vector3.ProjectOnPlane(globalWishVelocity, hit3.normal);
-            globalWishVelocity = temp;
-            globalWishVelocity.y = 0f;
-        }
 
         // TODO: Fix weird acceleration on slopes
         // TODO: See if we want to implement friction slow down for very rough surfaces
@@ -150,43 +157,77 @@ public class EntityMovement : MonoBehaviour {
 
         // Clamp the acceleration to some "maxAcceleration" constant and take account the surface we're on (friction wise
         float frictionThing = Mathf.Clamp01(dynamicFriction * frictionFactor + frictionOffset);
-        Vector3 finalVelocity = Vector3.ClampMagnitude(acceleration, maxAcceleration * factor * Time.fixedDeltaTime * frictionThing);
+        Vector3 accel = Vector3.ClampMagnitude(acceleration, maxAcceleration * factor * Time.fixedDeltaTime * frictionThing);
+        Vector3 velocity = rb.linearVelocity + accel;
 
         /*
-        // Simple jump system
-        if (jump) {
-            jump = false;
-            finalVelocity.y = jumpSpeed;
-            ground = null;
+        float ae = 0.1f;
+        if (Physics.SphereCast(s1 + Time.fixedDeltaTime * finalVelocity + Vector3.up * ae, cc.radius, Vector3.down, out RaycastHit hit, snapToNormalDist, ~LayerMask.GetMask("Player"))) {
+            Vector3 offset = s1 + Time.fixedDeltaTime * finalVelocity + Vector3.down * hit.distance + Vector3.up * ae;
+            DebugUtils.DrawSphere(s1, 0.5f, Color.blue);
+            DebugUtils.DrawSphere(offset, 0.5f, Color.red);
+            rb.useGravity = false;
+            Vector3 gya = offset - s1;
+            Debug.DrawLine(s1, offset);
+            Debug.Log(gya);
+            finalVelocity += gya * snapToNormalStrength;
+        } else {
+            rb.useGravity = true;
         }
         */
 
         //rb.AddForce(globalDir, ForceMode.VelocityChange);
-        rb.linearVelocity += finalVelocity;
-        rb.linearVelocity = new Vector3(rb.linearVelocity.x, oldGravity, rb.linearVelocity.z);
+
 
         // Used to stop the player from sliding down slopes and to "snap" the player to the ground normal
+        // TODO: Instead of "snapping" the player to the normal, take current velocity, use another capsule cast at the next physics step and check position
+        bool useGravity = true;
         if (Physics.SphereCast(origin, cc.radius, Vector3.down, out RaycastHit hit, snapToNormalDist, ~LayerMask.GetMask("Player"))) {
-            Vector3 offset = origin + Vector3.down * hit.distance;
-            //DebugUtils.DrawSphere(offset, cc.radius, Color.white);
+            grounded = true;
+            if (Time.fixedTime > (lastJumpTime + Time.fixedDeltaTime * 5) && !jump) {
+                Vector3 offset = origin + Vector3.down * hit.distance;
+                //DebugUtils.DrawSphere(offset, cc.radius, Color.white);
 
-            //bool grounded = GetDist(rb.position, Vector3.down * 2.0f) > 0f;
+                //bool grounded = GetDist(rb.position, Vector3.down * 2.0f) > 0f;
 
-            // TODO: Use a better ground check, still fuck ups sometimes
-            // TODO: Fix weird glitchyness when going on non-even grounds (ex. terrain) (note: it is because the snapToNormalStrength is too strong
-            // Maybe make it proportional to some factor?
-            if (Vector3.Angle(hit.normal, Vector3.up) < maxAntiSlideSlope) {
-                //temp += -hit.normal * snapToNormalStrength;
-                float diff = GetDist(origin, Vector3.down) - hit.distance;
-                //temp += -hit.normal * snapToNormalStrength * Vector3.Distance(point1, offset);
-                rb.linearVelocity += -hit.normal * diff * snapToNormalStrength;
-                rb.useGravity = false;
-                //Debug.DrawRay(hit.point, hit.normal);
-            } else {
-                rb.useGravity = true;
+                // TODO: Use a better ground check, still fuck ups sometimes
+                // TODO: Fix weird glitchyness when going on non-even grounds (ex. terrain) (note: it is because the snapToNormalStrength is too strong
+                // Maybe make it proportional to some factor?
+                Vector3 normal = hit.normal.normalized;
+                if (Vector3.Angle(normal, Vector3.up) < maxAntiSlideSlope) {
+                    //temp += -hit.normal * snapToNormalStrength;
+                    float diff = GetDist(origin, Vector3.down) - hit.distance;
+                    //temp += -hit.normal * snapToNormalStrength * Vector3.Distance(point1, offset);
+                    float fac = (1 - Vector3.Dot(normal, Vector3.up)) * verticalNormalFactor + verticalNormalOffset;
+                    velocity += -normal * diff * snapToNormalStrength * fac * (globalWishVelocity.magnitude * speedMagnitudeFactor + speedMagnitudeOffset);
+                    useGravity = false;
+                    //Debug.DrawRay(hit.point, hit.normal);
+                }
             }
         } else {
-            rb.useGravity = true;
+            grounded = false;
         }
+
+        summedGravity = rb.linearVelocity.y;
+        if (!useGravity) {
+            summedGravity = 0f;
+        } else {
+            summedGravity -= gravity * Time.fixedDeltaTime;
+            velocity.y = summedGravity;
+        }
+
+        // Simple jump system
+        if (jump) {
+            jump = false;
+            if (grounded) {
+                velocity.y = jumpSpeed;
+                grounded = false;
+                lastJumpTime = Time.fixedTime;
+                //rb.position = new Vector3(rb.position.x, rb.position.y + 0.2f, rb.position.z);
+            }
+        }
+
+        rb.linearVelocity = velocity;
+    
     }
 }

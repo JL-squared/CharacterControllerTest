@@ -23,7 +23,8 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     public void Jump(InputAction.CallbackContext context) {
-        movement.QueueJump();
+        if (context.performed && !context.canceled)
+            movement.QueueJump();
     }
 
     public void Sprint(InputAction.CallbackContext context) {
