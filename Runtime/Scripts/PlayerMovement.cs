@@ -14,7 +14,7 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     public void Move(InputAction.CallbackContext context) {
-        movement.QueueMove(context.ReadValue<Vector2>());
+        //movement.QueueMove(context.ReadValue<Vector2>());
     }
 
     public void Look(InputAction.CallbackContext context) {
@@ -23,19 +23,22 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     public void Jump(InputAction.CallbackContext context) {
+        /*
         if (context.performed && !context.canceled)
             movement.QueueJump();
+        */
     }
 
     public void Sprint(InputAction.CallbackContext context) {
-        movement.ToggleSprint(context.performed);
+        //movement.ToggleSprint(context.performed);
     }
 
     public void Crouch(InputAction.CallbackContext context) {
-        movement.ToggleCrouch(context.performed);
+        //movement.ToggleCrouch(context.performed);
     }
 
     private void Update() {
+        movement.QueueMove(Vector2.up);
         head.transform.localRotation = Quaternion.Euler(-lookDirection.y, 0f, 0f);
     }
 }

@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Logger : MonoBehaviour
+public class MyLogger : MonoBehaviour
 {
     private List<(Vector3, object, bool)> messages;
 
-    public static Logger Instance;
+    public static MyLogger Instance;
     private void Start() {
         Instance = this;
         messages = new List<(Vector3, object, bool)> ();
@@ -34,6 +34,7 @@ public class Logger : MonoBehaviour
 #if UNITY_EDITOR
         foreach (var item in messages) {
             UnityEditor.Handles.Label(item.Item1, item.Item2.ToString(), style);
+            Gizmos.DrawWireSphere(item.Item1, 0.2f);
         }
 #endif
 
