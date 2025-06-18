@@ -9,16 +9,19 @@ public class EntityMovement : MonoBehaviour {
 
     private Vector3 nextPosition;
     private Vector3 prevPosition;
+    private CapsuleCollider cc;
     private Vector3 velocity;
 
     private void Start() {
-        speed = 7;
         localWishDirection = Vector2.zero;
         angle = 0;
 
         nextPosition = transform.position;
         prevPosition = transform.position;
-        velocity = Vector3.zero;
+
+        cc = GetComponent<CapsuleCollider>();
+        cc.radius = radius;    
+        cc.height = height;
     }
 
     public void QueueMove(Vector2 localWishDirection) {
@@ -49,13 +52,11 @@ public class EntityMovement : MonoBehaviour {
         Vector3 flat = new Vector3(clamped.x, 0f, clamped.y);
         Vector3 wishVelocity = transform.TransformDirection(flat) * speed;
 
-        Vector3 s1 = prevPosition + Vector3.down * height * 0.25f;
-        Vector3 s2 = prevPosition + Vector3.up * height * 0.25f;
-
-
         // gravity check
         {
-            if (Physics.CapsuleCast(s1, s2, radius, Vector3.down, out RaycastHit hit, 0.1f)) {
+            Vector3 s1_1 = nextPosition + Vector3.down * height * 0.25f;
+            Vector3 s2_1 = nextPosition + Vector3.up * height * 0.25f;
+            if (Physics.CapsuleCast(s1_1, s2_1, radius, Vector3.down, out RaycastHit hit, 0.1f)) {
                 MyLogger.Instance.Log(hit.point, hit.distance);
                 velocity.y = 0f;
             } else {
@@ -63,37 +64,55 @@ public class EntityMovement : MonoBehaviour {
             }
         }
 
+        velocity.x = wishVelocity.x;
+        velocity.z = wishVelocity.z;
+
+        nextPosition += velocity * Time.fixedDeltaTime;
+
         /*
-        // movement check
+        // move in direction (snap to ground and proper terrain handle...)
         {
-            if (Physics.CapsuleCast(s1, s2, radius, wishVelocity, out RaycastHit hit2, 0.1f)) {
-                velocity.x = 0f; 
-                velocity.z = 0f;
+            // check if there's something in front of us, above us 
+            float upFactor = 0.15f;
+            Vector3 s1_1 = nextPosition + Vector3.down * height * 0.25f + Vector3.up * upFactor;
+            Vector3 s2_1 = nextPosition + Vector3.up * height * 0.25f + Vector3.up * upFactor;
+            if (Physics.CapsuleCast(s1_1, s2_1, radius, Vector3.down, out RaycastHit hit, height + upFactor * 2f)) {
+                MyLogger.Instance.Log(hit.point, hit.distance);
 
-                Rigidbody other = hit2.rigidbody;
+                float newY = hit.point.y + height * 0.5f;
 
-                if (other != null) {
-                    other.AddForceAtPosition(wishVelocity, hit2.point, ForceMode.VelocityChange);
+                if (Mathf.Abs(nextPosition.y - newY) < upFactor) {
+                    nextPosition.y = newY + 0.02f;
                 }
-            } else {
-                velocity.x = wishVelocity.x;
-                velocity.z = wishVelocity.z;
+
+                if (hit.normal.y < 0.9) {
+                    velocity.y = -2f;
+                    velocity.x = 0f;
+                    velocity.z = 0f;
+                }
             }
         }
         */
 
-        float maxPushStrength = 0.1f;
-        float pushStength = 10f;
 
         {
-            //s1 -= move.normalized;
-            //s2 -= move.normalized;
-            DebugUtils.DrawSphere(s1, radius, Color.yellow);
-            DebugUtils.DrawSphere(s2, radius, Color.yellow);
-            velocity.x = projected.x;
-            velocity.z = projected.z;
-        }
+            Vector3 s1 = nextPosition + Vector3.down * height * 0.25f;
+            Vector3 s2 = nextPosition + Vector3.up * height * 0.25f;
 
-        nextPosition = prevPosition + velocity * Time.fixedDeltaTime;
+            Collider[] colliders = Physics.OverlapCapsule(s1, s2, radius);
+
+            foreach (Collider collider in colliders) {
+                if (collider == cc) continue;
+
+                if (Physics.ComputePenetration(cc, nextPosition, Quaternion.identity, collider, collider.transform.position, collider.transform.rotation, out Vector3 dir, out float dist)) {
+                    if (collider.attachedRigidbody == null) {
+                        nextPosition += dir * dist;
+                    } else {
+                        nextPosition += dir * dist;
+                        nextPosition += collider.attachedRigidbody.linearVelocity * Time.fixedDeltaTime;
+                    }
+                }
+            }
+        }
     }
 }

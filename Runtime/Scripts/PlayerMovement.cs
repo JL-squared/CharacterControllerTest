@@ -14,7 +14,7 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     public void Move(InputAction.CallbackContext context) {
-        //movement.QueueMove(context.ReadValue<Vector2>());
+        movement.QueueMove(context.ReadValue<Vector2>());
     }
 
     public void Look(InputAction.CallbackContext context) {
@@ -38,7 +38,7 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     private void Update() {
-        movement.QueueMove(Vector2.up);
+        //movement.QueueMove(Vector2.up);
         head.transform.localRotation = Quaternion.Euler(-lookDirection.y, 0f, 0f);
     }
 }
